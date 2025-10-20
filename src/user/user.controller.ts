@@ -84,7 +84,6 @@ export class UserController {
     if (!file){
       throw new BadRequestException('A file is required for update')
     }
-    const currentUserId = (req.user as any)._id
-    return this.fileService.updateFile(id, file, currentUserId)
+    return this.fileService.updateFile(id, file, req)
   }
 }

@@ -62,14 +62,14 @@ export class FileService {
   }
 
  async deleteFile(publicId: string, req: Request) {
-    const currentUserId = (req.user as any)._id
+    const currentUserId = req.user as {id: string}
     const deletedDocument = await this.userImageModel.findOneAndDelete({ publicId });
 
     if (!deletedDocument) {
       throw new NotFoundException(`Image with Public ID "${publicId}" not found in the database.`);
     }
 
-    if(deletedDocument.userId !== currentUserId){
+    if(deletedDocument.userId !== currentUserId.id){
       throw new ForbiddenException(`Current user not allowed to delete ID: ${publicId}`)
     }
 
@@ -88,13 +88,14 @@ export class FileService {
     };
   }
 
-  async updateFile(_id:string, file: Express.Multer.File, currentUserId: string) {
+  async updateFile(_id:string, file: Express.Multer.File, req: Request) {
+    const currentUserId = req.user as {id:string}
     const existingFile = await this.userImageModel.findById(_id).exec()
     if (!existingFile){
       throw new NotFoundException(`Image with ID ${_id} not found`)
     }
 
-    if (existingFile.userId !== currentUserId){
+    if (existingFile.userId !== currentUserId.id){
       throw new ForbiddenException('You are not authorized to modify this file')
     }
 
