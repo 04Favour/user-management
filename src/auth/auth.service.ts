@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from 'src/user/schema/user.schema';
@@ -9,10 +9,15 @@ import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtConstant } from './constants';
 import { Response, Request} from 'express';
+import { OtpService } from 'src/otp/otp.service';
+import { OTPEnum } from 'src/otp/enum/otp.enum';
+import { sendEmailDto } from 'src/services/dto/email.dto';
+import { EmailService } from 'src/services/email.service';
+import { RequestTokenDto } from './dto/requestToken.dto';
 
 @Injectable()
 export class AuthService {
-    constructor(@InjectModel(User.name) private userModel: Model<User>, private jwtService: JwtService){}
+    constructor(@InjectModel(User.name) private userModel: Model<User>, private jwtService: JwtService, private readonly otpService: OtpService, private readonly emailService: EmailService){}
 
     async register(register: RegisterUserDto): Promise<{success: boolean, message: string, user}>{
         const user = await this.findEmail(register)
@@ -82,6 +87,83 @@ export class AuthService {
 
     }
 
+    async changePassword({password, newPassword}: {password: string, newPassword: string}, req: Request){
+        const decodedUser = req.user as {fullName: string}
+        const user = await this.userModel.findById(decodedUser).select('+password')
+        if (!user){
+            throw new BadRequestException('User not found')
+        }
+        if(user.fullName !== decodedUser.fullName){
+            throw new ForbiddenException('Not accessible to you')
+        }
+        const comparePassword = await bcrypt.compare(password, user.password)
+        if(!comparePassword){
+            throw new UnauthorizedException('Wrong credentials')
+        }
+        user.password = await bcrypt.hash(newPassword, 10)
+        await user.save()
+        return {
+            success: true,
+            message: "Password changed succesfully",
+        }
+
+    }
+
+    async emailVerification(user: User, otpType: OTPEnum){
+        const token = await this.otpService.generateOTP(user, otpType)
+        if(otpType === OTPEnum.OTP){
+            const emailDto = {
+            recipients: [user.email],
+            subject: "OTP Verification",
+            html: `Your otp code is: <strong>${token}</strong>.
+            <br />Provide this otp to verify your account `
+            }
+            return await this.emailService.sendEmail(emailDto)
+        }
+        else {
+            const resetLink = `${process.env.RESET_PASSWORD_URL}?token=${token}`
+            const emailDto = {
+            recipients: [user.email],
+            subject: "Password Reset Link",
+            html: `Click the given link to reset your password: 
+            <p><a href="${resetLink}">Reset Password</a></p> `
+            }
+            return await this.emailService.sendEmail(emailDto)
+        }
+        
+
+        
+    }
+
+
+    async verifyToken(id: string, token:string){
+        await this.otpService.validateOTP(id, token)
+    }
+    async forgotPassword(forgotDto: RequestTokenDto){
+        const {email} = forgotDto
+        const user = await this.userModel.findOne({email})
+        if (!user){
+            throw new NotFoundException('User not found')
+        }
+        await this.emailVerification(user, OTPEnum.RESET_LINK)
+        return {
+            message: "Password reset link has been sent to your email"
+        }
+    }
+
+    async resetPassword(token: string, password: string) {
+        const payload = await this.otpService.validateResetPassword(token)
+        const user = await this.userModel.findById(payload.id)
+        if(!user) {
+            throw new BadRequestException('User not found')
+        }
+        user.password = await bcrypt.hash(password, 10)
+        await user.save()
+        return {
+            message: "Password reset successfully"
+        }
+
+    }
 
 
 

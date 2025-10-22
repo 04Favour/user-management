@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import mongoose from 'mongoose';
+
 
 export const DatabaseConfig = [
   ConfigModule.forRoot({

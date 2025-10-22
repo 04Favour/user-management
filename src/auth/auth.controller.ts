@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './auth.guard';
+import { RequestTokenDto } from './dto/requestToken.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -23,5 +24,21 @@ export class AuthController {
   @Get('profile')
   profile(@Req() req){
     return this.authService.profile(req)
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@Body() {password, newPassword}: {password: string, newPassword: string}, @Req() req){
+    return this.authService.changePassword({password, newPassword}, req)
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body() email: RequestTokenDto){
+    return this.authService.forgotPassword(email)
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() {token, password}: {token: string, password: string}){
+    return this.authService.resetPassword(token, password)
   }
 }
