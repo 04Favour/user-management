@@ -5,6 +5,8 @@ import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './auth.guard';
 import { RequestTokenDto } from './dto/requestToken.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -40,5 +42,15 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() {token, password}: {token: string, password: string}){
     return this.authService.resetPassword(token, password)
+  }
+
+  @Post('otp-request')
+  otpRequest(@Body() dto:ForgotPasswordDto, @Res() res){
+    return this.authService.forgotPasswordOTP(dto.email, res)
+  }
+
+  @Post('reset')
+  reset(@Body() dto: ResetPasswordDto, @Req() req){
+    return this.authService.reset(dto.token, dto.password, req)
   }
 }

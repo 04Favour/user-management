@@ -19,7 +19,7 @@ export class EmailService {
         });
     }
 
-    async sendEmail(dto: sendEmailDto): Promise<void> {
+    async sendEmail(dto: sendEmailDto): Promise<boolean> {
         const { recipients, subject, html } = dto;
 
 
@@ -33,9 +33,10 @@ export class EmailService {
         try {
             const info = await this.transporter.sendMail(mailOptions); 
             console.log('Message sent: %s', info.messageId);
+            return true
         } catch(error) {
             console.error('Error sending mail: ', error);
-            
+            return false
         }
     }
 }

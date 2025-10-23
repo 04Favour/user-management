@@ -16,26 +16,34 @@ export class OtpService {
     // generate OTP
     async generateOTP(user: User, type: OTPEnum){
         if(type === OTPEnum.OTP){
-            const otp = crypto.randomInt(100000, 999999).toString()
-            const hashedOtp = await bcrypt.hash(otp, 10)
-            const existingOtp = await this.otpSchema.findOne({
+            const otp = crypto.randomInt(100000, 999999).toString();
+            const hashedOtp = await bcrypt.hash(otp, 10);
+            const existingOtp = await this.otpSchema.findOne({ user: user._id, type });
+
+            if (existingOtp) {
+                const timeDiff = (Date.now() - existingOtp.updatedAt.getTime()) / 1000;
+                if (timeDiff < 10) {
+                throw new BadRequestException(
+                    `Please wait ${Math.ceil(10 - timeDiff)} seconds before requesting another OTP.`
+                );
+                }
+
+                existingOtp.token = hashedOtp;
+                existingOtp.updatedAt = new Date(); 
+                await existingOtp.save();
+                return otp;
+            }
+            const newOtp = await this.otpSchema.create({
                 user: user._id,
-                type: type
-            })
-            if(existingOtp){
-                existingOtp.token = hashedOtp
-                await existingOtp.save()
-            }
-            const otpSchema = await this.otpSchema.create({
-                user,
                 type,
-                token: hashedOtp
-            })
-            if (!otpSchema){
-                throw new BadRequestException('Something went wrong')
+                token: hashedOtp,
+            });
+
+            if (!newOtp) {
+                throw new BadRequestException('Something went wrong while generating OTP');
             }
-            await otpSchema.save()
-            return otp
+
+            return otp;
         }
         else {
             const resetToken = this.jwtService.sign({id: user._id, email: user.email}, {
@@ -49,7 +57,7 @@ export class OtpService {
 
     async validateOTP(id: string, token: string): Promise<boolean>{
         const validToken = await this.otpSchema.findOne({
-            _id: id,
+            user: id,
         })
         if(!validToken){
             throw new BadRequestException('Invalid or expired OTP code')

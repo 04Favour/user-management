@@ -10,6 +10,6 @@ import { ConfigModule } from "@nestjs/config";
     imports: [MongooseModule.forFeature([{ name: OTP.name, schema: OtpSchema }]), JwtModule, ConfigModule],
     controllers: [],
     providers: [OtpService],
-    exports: [OtpService]
+    exports: [OtpService, MongooseModule]
 })
 export class OtpModule {}

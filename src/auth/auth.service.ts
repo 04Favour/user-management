@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { User } from 'src/user/schema/user.schema';
 import { RegisterUserDto } from './dto/register-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -14,10 +14,12 @@ import { OTPEnum } from 'src/otp/enum/otp.enum';
 import { sendEmailDto } from 'src/services/dto/email.dto';
 import { EmailService } from 'src/services/email.service';
 import { RequestTokenDto } from './dto/requestToken.dto';
+import { OTP } from 'src/otp/schema/otp.schema';
+
 
 @Injectable()
 export class AuthService {
-    constructor(@InjectModel(User.name) private userModel: Model<User>, private jwtService: JwtService, private readonly otpService: OtpService, private readonly emailService: EmailService){}
+    constructor(@InjectModel(User.name) private userModel: Model<User>, private jwtService: JwtService, private readonly otpService: OtpService, private readonly emailService: EmailService, @InjectModel(OTP.name) private readonly otpSchema: Model<OTP>){}
 
     async register(register: RegisterUserDto): Promise<{success: boolean, message: string, user}>{
         const user = await this.findEmail(register)
@@ -109,7 +111,7 @@ export class AuthService {
 
     }
 
-    async emailVerification(user: User, otpType: OTPEnum){
+    async emailVerification(user: User, otpType: OTPEnum): Promise<boolean>{
         const token = await this.otpService.generateOTP(user, otpType)
         if(otpType === OTPEnum.OTP){
             const emailDto = {
@@ -135,10 +137,6 @@ export class AuthService {
         
     }
 
-
-    async verifyToken(id: string, token:string){
-        await this.otpService.validateOTP(id, token)
-    }
     async forgotPassword(forgotDto: RequestTokenDto){
         const {email} = forgotDto
         const user = await this.userModel.findOne({email})
@@ -165,6 +163,62 @@ export class AuthService {
 
     }
 
+    async forgotPasswordOTP(email: string, res: Response){
+        const user = await this.userModel.findOne({email})
+        if(!user){
+            throw new NotFoundException('User not found')
+        }
+        const sendToken= await this.emailVerification(user, OTPEnum.OTP)
+        if(!sendToken){
+            throw new BadRequestException('Sorry, token could not be generated')
+        }
+        const payload = this.jwtService.sign({id: user._id, email: user.email}, {
+            secret: process.env.JWT_SECRET
+        })
+        if(!payload){
+            throw new BadRequestException('Payload failed')
+        }
+        res.cookie('token', payload)
+        res.send({
+            success: true,
+            message: "Otp has been sent to your mail. Kindly check to update password",
+        })
+    }
+
+    async reset(otp: string, newPassword: string, req: Request){
+        const token = req.cookies?.token
+        if(!token){
+            throw new NotFoundException('Not found')
+        }
+        const decodedUser = await this.jwtService.verify(token, {
+            secret: process.env.JWT_SECRET
+        })
+        if (!decodedUser) {
+            throw new UnauthorizedException('Not allowed')
+        }
+        const decodedUserId = decodedUser.id
+        if(!decodedUserId) throw new BadRequestException('Invalid token payload')
+        const user = await this.otpSchema.findOne({user: new Types.ObjectId(decodedUserId)})
+        if (!user) throw new NotFoundException('sorry, not found')
+        const id = (user.user).toString()
+        const validateToken = await this.otpService.validateOTP(id, otp)
+        if(!validateToken){
+            throw new BadRequestException("Token does not exist")
+        }
+        const newUser = await this.userModel.findOne({
+            _id: id
+        })
+        if (!newUser){
+            throw new NotFoundException('User not found')
+        }
+        const hashPassword = await bcrypt.hash(newPassword, 10)
+        newUser.password = hashPassword
+        await newUser.save()
+        return {
+            message: "Password has been changed successfully"
+        }
+    }
+
 
 
 
@@ -180,8 +234,4 @@ export class AuthService {
         const getUser = await this.userModel.findOne({email: dto.email}).select('+password')
         return getUser
     }
-
-    // isMatch = async (args:{password: string, hash:string}) => {
-    //     return await bcrypt.compare(args.password, args.hash)
-    // }
 }
