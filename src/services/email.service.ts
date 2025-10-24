@@ -38,8 +38,13 @@ export class EmailService {
             const info = await this.transporter.sendMail(mailOptions); 
             console.log('Message sent: %s', info.messageId);
             return true
-        } catch(error) {
-            console.error('Error sending mail: ', error);
+        } catch(error: any) {
+            console.error('Email Send Failed - Nodemailer Error Code:', error.code); 
+            console.error('Email Send Failed - Nodemailer Error Message:', error.message);
+            console.error('Email Send Failed - Full Error Object:', error);
+            if (error.response) {
+            console.error('Nodemailer SMTP Response:', error.response);
+            }
             return false
         }
     }
