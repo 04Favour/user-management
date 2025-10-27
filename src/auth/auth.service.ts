@@ -89,28 +89,6 @@ export class AuthService {
 
     }
 
-    async changePassword({password, newPassword}: {password: string, newPassword: string}, req: Request){
-        const decodedUser = req.user as {fullName: string}
-        const user = await this.userModel.findById(decodedUser).select('+password')
-        if (!user){
-            throw new BadRequestException('User not found')
-        }
-        if(user.fullName !== decodedUser.fullName){
-            throw new ForbiddenException('Not accessible to you')
-        }
-        const comparePassword = await bcrypt.compare(password, user.password)
-        if(!comparePassword){
-            throw new UnauthorizedException('Wrong credentials')
-        }
-        user.password = await bcrypt.hash(newPassword, 10)
-        await user.save()
-        return {
-            success: true,
-            message: "Password changed succesfully",
-        }
-
-    }
-
     async emailVerification(user: User, otpType: OTPEnum): Promise<boolean>{
         const token = await this.otpService.generateOTP(user, otpType)
         if(otpType === OTPEnum.OTP){

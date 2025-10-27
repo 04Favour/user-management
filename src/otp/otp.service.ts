@@ -70,7 +70,7 @@ export class OtpService {
         return true
     }
 
-   async validateResetPassword(token: string): Promise<{ id: string; email: string }> {
+  async validateResetPassword(token: string): Promise<{ id: string; email: string }> {
   try {
     const payload = await this.jwtService.verifyAsync(token, {
       secret: this.configService.get<string>('RESET_LINK'),
