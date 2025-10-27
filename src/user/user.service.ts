@@ -1,14 +1,23 @@
 /* eslint-disable prettier/prettier */
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model } from 'mongoose';
 import { User } from './schema/user.schema';
 import { Request, Response } from 'express';
 import { UpdateUser } from './dto/update.dto';
+import axios from 'axios';
+import { error } from 'console';
 
 @Injectable()
 export class UserService {
-constructor(@InjectModel(User.name) private userModel: Model<User>){}
+    model : string;
+    api_key :string;
+    base_url: string
+constructor(@InjectModel(User.name) private userModel: Model<User>){
+    this.model = process.env.MODEL || ''
+    this.api_key= process.env.API_KEY || ''
+    this.base_url= process.env.BASE_URL || ''
+}
     async updateUser(dto: UpdateUser, req: Request, _id?: string) {
         const decodedUser = req.user as { id: string; email: string };
 
@@ -99,5 +108,57 @@ constructor(@InjectModel(User.name) private userModel: Model<User>){}
         throw new UnauthorizedException('Unauthorized to access this route')
     }
 
+  }
+
+  async askGemini(prompt: string): Promise<{
+    response: string;
+    sources: string[]
+  }>{
+    try{
+        const url = `${this.base_url}/models/${this.model}:generateContent`
+        const response = await axios.post(url,{
+            model: this.model,
+            contents: [{
+               role: 'user',
+               parts: [{text: prompt}] 
+            }],
+            tools: [{googleSearch: {}}]
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': this.api_key
+            },
+            timeout: 20000
+        },
+    )
+    const candidate = response.data?.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text ?? '';
+    const groundingMetadata = candidate?.groundingMetadata ?? {};
+    const chunks = groundingMetadata?.groundingChunks ?? [];
+    const supports = groundingMetadata?.groundingSupports ?? [];
+
+    if(!text){
+        throw new NotFoundException('No valid response from gemini API')
+    }
+
+    let citedText = text;
+    const sources: string[] = [];
+
+    chunks.forEach((chunk:any, index: number)=>{
+        const citationNum = index + 1;
+        sources.push(`${citationNum}. ${chunk.web?.uri || 'Unknown Source'}`)
+
+        if(supports[index]){
+            citedText += ` [${citationNum}]`
+        }
+    })
+        return {
+            response: citedText,
+            sources
+        }
+    }catch(e){
+        throw new error('Failed to generate response from gemini API', e)
+    }
   }
 }

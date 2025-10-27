@@ -86,4 +86,12 @@ export class UserController {
     }
     return this.fileService.updateFile(id, file, req)
   }
+
+  @Post('ask-gemini')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async promptGemini(@Body('prompt') prompt: string){
+    const answer = await this.userService.askGemini(prompt)
+    return {prompt, answer}
+  }
 }

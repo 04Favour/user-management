@@ -1,7 +1,5 @@
 /* eslint-disable prettier/prettier */
 import { Injectable } from "@nestjs/common";
-import * as nodemailer from "nodemailer"; // Use import * as
-import { SendMailOptions, Transporter } from "nodemailer"; // Import Transporter and SendMailOptions
 import { sendEmailDto } from "./dto/email.dto";
 import { Resend } from "resend";
 
